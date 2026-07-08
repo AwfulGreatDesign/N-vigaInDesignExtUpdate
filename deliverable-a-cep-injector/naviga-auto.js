@@ -1,17 +1,19 @@
 (function () {
     // ── Configuration ────────────────────────────────────────────────────────
     var AUTO_REFRESH_INTERVAL_MS = 10000;  // 10 seconds
-    var CLAIM_DELAY_MS           = 0;      // ms to wait before clicking Assign
+    var CLAIM_DELAY_MS           = 500;    // ms to wait after selectMaterial() before looking for Assign btn
 
     // ── Storage keys (must not collide with Naviga's existing keys) ──────────
     var KEY_AUTO_REFRESH = 'naviga_auto_refresh';
     var KEY_AUTO_CLAIM   = 'naviga_auto_claim';
 
     // ── Internal state ───────────────────────────────────────────────────────
-    var refreshTimer    = null;
-    var claimObserver   = null;
-    var lastRefreshTime = null;
-    var statusEl        = null;
+    var refreshTimer      = null;
+    var claimObserver     = null;
+    var assignObserver    = null;
+    var lastRefreshTime   = null;
+    var statusEl          = null;
+    var claimInProgress   = false;  // prevent re-entrancy if multiple rows appear
 
     // ── Settings persistence ─────────────────────────────────────────────────
     function loadSettings() {
@@ -44,6 +46,10 @@
         statusEl.textContent = 'Auto-refresh: ON — last: ' + elapsed + 's ago';
     }
 
+    function setStatus(msg) {
+        if (statusEl) statusEl.textContent = msg;
+    }
+
     // ── Auto-refresh timer ───────────────────────────────────────────────────
     function startRefreshTimer() {
         stopRefreshTimer();
@@ -64,19 +70,83 @@
         }
     }
 
-    // ── Auto-claim observer ──────────────────────────────────────────────────
+    // ── Auto-claim — step 2: watch #projectDetailTemplate for Assign button ──
+    function waitForAssignButton() {
+        stopAssignObserver();
+        var template = document.getElementById('projectDetailTemplate');
+        if (!template) {
+            claimInProgress = false;
+            return;
+        }
+
+        // Check if already present (fast render)
+        var assignBtn = template.querySelector('button#assign-indd');
+        if (assignBtn) {
+            setStatus('Auto-claim: assigning…');
+            assignBtn.click();
+            claimInProgress = false;
+            stopAssignObserver();
+            return;
+        }
+
+        // Otherwise watch for it to be injected
+        assignObserver = new MutationObserver(function () {
+            var btn = template.querySelector('button#assign-indd');
+            if (btn) {
+                stopAssignObserver();
+                setStatus('Auto-claim: assigning…');
+                btn.click();
+                claimInProgress = false;
+            }
+        });
+        assignObserver.observe(template, { childList: true, subtree: true });
+
+        // Safety timeout — if Assign never appears (already assigned), give up
+        setTimeout(function () {
+            if (assignObserver) {
+                stopAssignObserver();
+                claimInProgress = false;
+                setStatus('Auto-claim: no Assign button found (ad may already be taken)');
+            }
+        }, 5000);
+    }
+
+    function stopAssignObserver() {
+        if (assignObserver !== null) {
+            assignObserver.disconnect();
+            assignObserver = null;
+        }
+    }
+
+    // ── Auto-claim — step 1: watch queue for new unassigned rows ─────────────
     function startClaimObserver() {
         stopClaimObserver();
         var target = document.querySelector('#tblProjectLinesUnAssigned tbody');
         if (!target) return;
-        claimObserver = new MutationObserver(function () {
-            var assignBtn = document.querySelector('button#assign-indd');
-            if (assignBtn) {
-                setTimeout(function () {
-                    assignBtn.click();
-                }, CLAIM_DELAY_MS);
-            }
+
+        claimObserver = new MutationObserver(function (mutations) {
+            if (claimInProgress) return;
+
+            // Look for a real ad row — it will contain button#open-project
+            var viewBtn = document.querySelector('#tblProjectLinesUnAssigned tbody button#open-project');
+            if (!viewBtn) return;
+
+            // Extract materialId from onclick="javascript:selectMaterial('...')"
+            var onclick = viewBtn.getAttribute('onclick') || '';
+            var match = onclick.match(/selectMaterial\('([^']+)'\)/);
+            if (!match) return;
+
+            var materialId = match[1];
+            claimInProgress = true;
+            setStatus('Auto-claim: new ad found — opening detail view…');
+
+            // Call the existing Naviga function to open the detail view
+            selectMaterial(materialId);
+
+            // After detail view renders, find and click Assign
+            setTimeout(waitForAssignButton, CLAIM_DELAY_MS);
         });
+
         claimObserver.observe(target, { childList: true, subtree: true });
     }
 
@@ -85,6 +155,8 @@
             claimObserver.disconnect();
             claimObserver = null;
         }
+        stopAssignObserver();
+        claimInProgress = false;
     }
 
     // ── UI controls ──────────────────────────────────────────────────────────
