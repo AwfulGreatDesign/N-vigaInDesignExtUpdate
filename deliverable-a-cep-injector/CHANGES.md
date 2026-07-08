@@ -63,15 +63,16 @@ untouched. `naviga-auto.js` only adds new behavior on top of existing functions.
 **Purpose:** Contains all automation logic — auto-refresh timer, auto-claim
 MutationObserver, UI toggle controls, and localStorage persistence.
 
-**Functions defined:**
-- `navigaAutoInit()` — entry point, called once on DOMContentLoaded
-- `navigaStartRefreshTimer()` — starts/restarts the 10-second setInterval
-- `navigaStopRefreshTimer()` — clears the interval
-- `navigaStartClaimObserver()` — attaches MutationObserver to unassigned queue tbody
-- `navigaStopClaimObserver()` — disconnects the observer
-- `navigaInjectControls()` — injects the Auto-Refresh and Auto-Claim checkboxes into the panel UI
-- `navigaSaveSettings()` — persists toggle state to localStorage
-- `navigaLoadSettings()` — reads toggle state from localStorage on init
+**Functions defined (all scoped inside an IIFE — not accessible from global scope):**
+- `init()` — entry point, called once on window load
+- `startRefreshTimer()` — starts/restarts the 10-second setInterval
+- `stopRefreshTimer()` — clears the interval
+- `startClaimObserver()` — attaches MutationObserver to unassigned queue tbody
+- `stopClaimObserver()` — disconnects the observer
+- `injectControls()` — injects the Auto-Refresh and Auto-Claim checkboxes into the panel UI
+- `saveSettings()` — persists toggle state to localStorage
+- `loadSettings()` — reads toggle state from localStorage on init
+- `updateStatus()` — updates the elapsed-time status display every second
 
 **Calls made into existing Naviga functions:**
 - `refresh()` — called by the auto-refresh timer (defined in index.html inline script)

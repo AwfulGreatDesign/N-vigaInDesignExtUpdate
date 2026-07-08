@@ -6,7 +6,7 @@ inside Adobe InDesign on a configurable timer. Does not modify any Naviga files.
 ## Requirements
 
 - macOS 12+
-- Python 3.11+
+- Python 3.9+
 - Adobe InDesign must be open with the Naviga panel visible
 
 ## Setup
