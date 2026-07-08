@@ -14,7 +14,7 @@ if [ -f "$BACKUP_DIR/index.html" ]; then
 else
   echo "WARNING: No backup found at $BACKUP_DIR/index.html"
   echo "Attempting to remove script tag manually..."
-  sed -i.tmp '/<script type="text\/javascript" src="naviga-auto.js"><\/script>/d' \
+  sed -i.tmp '/^[[:space:]]*<script type="text\/javascript" src="naviga-auto\.js"><\/script>[[:space:]]*$/d' \
       "$NAVIGA_CLIENT/index.html"
   rm -f "$NAVIGA_CLIENT/index.html.tmp"
   echo "Removed naviga-auto.js script tag from index.html"
