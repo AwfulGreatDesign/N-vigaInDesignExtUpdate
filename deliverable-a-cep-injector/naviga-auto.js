@@ -6,6 +6,7 @@
     // ── Storage keys (must not collide with Naviga's existing keys) ──────────
     var KEY_AUTO_REFRESH = 'naviga_auto_refresh';
     var KEY_AUTO_CLAIM   = 'naviga_auto_claim';
+    var KEY_INTERVAL     = 'naviga_auto_interval';
 
     // ── Internal state ───────────────────────────────────────────────────────
     var refreshTimer      = null;
@@ -19,15 +20,18 @@
     function loadSettings() {
         var r = localStorage.getItem(KEY_AUTO_REFRESH);
         var c = localStorage.getItem(KEY_AUTO_CLAIM);
+        var i = parseInt(localStorage.getItem(KEY_INTERVAL), 10);
         return {
-            autoRefresh: r === null ? true  : r === 'true',
-            autoClaim:   c === null ? false : c === 'true'
+            autoRefresh:     r === null ? true  : r === 'true',
+            autoClaim:       c === null ? false : c === 'true',
+            intervalSeconds: (isNaN(i) || i < 1 || i > 99) ? 10 : i
         };
     }
 
-    function saveSettings(autoRefresh, autoClaim) {
+    function saveSettings(autoRefresh, autoClaim, intervalSeconds) {
         localStorage.setItem(KEY_AUTO_REFRESH, autoRefresh ? 'true' : 'false');
         localStorage.setItem(KEY_AUTO_CLAIM,   autoClaim   ? 'true' : 'false');
+        localStorage.setItem(KEY_INTERVAL,     String(intervalSeconds));
     }
 
     // ── Status display ───────────────────────────────────────────────────────
@@ -53,6 +57,7 @@
     // ── Auto-refresh timer ───────────────────────────────────────────────────
     function startRefreshTimer() {
         stopRefreshTimer();
+        var intervalMs = loadSettings().intervalSeconds * 1000;
         refreshTimer = setInterval(function () {
             // Only refresh when user is logged in (logout div is visible)
             if ($('#divLogout').is(':visible')) {
@@ -60,7 +65,7 @@
                 lastRefreshTime = Date.now();
                 updateStatus();
             }
-        }, AUTO_REFRESH_INTERVAL_MS);
+        }, intervalMs);
     }
 
     function stopRefreshTimer() {
@@ -176,7 +181,22 @@
         var lblRefresh = document.createElement('label');
         lblRefresh.htmlFor   = 'naviga-auto-refresh-toggle';
         lblRefresh.textContent = 'Auto-Refresh';
-        lblRefresh.style.cssText = 'margin-right: 10px; cursor: pointer;';
+        lblRefresh.style.cssText = 'margin-right: 6px; cursor: pointer;';
+
+        // Interval input
+        var intervalInput = document.createElement('input');
+        intervalInput.type        = 'text';
+        intervalInput.id          = 'naviga-auto-interval';
+        intervalInput.maxLength   = 2;
+        intervalInput.style.cssText =
+            'width: 26px; text-align: center; font-size: 75%; ' +
+            'border: 1px solid #aaa; border-radius: 3px; ' +
+            'padding: 1px 2px; margin-right: 2px; ' +
+            'background: #fff; color: #333; vertical-align: middle;';
+
+        var lblSec = document.createElement('label');
+        lblSec.textContent = 's';
+        lblSec.style.cssText = 'margin-right: 10px; color: #aaa;';
 
         // Auto-Claim checkbox
         var cbClaim = document.createElement('input');
@@ -196,7 +216,7 @@
         // Wire up events
         cbRefresh.addEventListener('change', function () {
             var settings = loadSettings();
-            saveSettings(cbRefresh.checked, settings.autoClaim);
+            saveSettings(cbRefresh.checked, settings.autoClaim, settings.intervalSeconds);
             if (cbRefresh.checked) {
                 startRefreshTimer();
             } else {
@@ -207,7 +227,7 @@
 
         cbClaim.addEventListener('change', function () {
             var settings = loadSettings();
-            saveSettings(settings.autoRefresh, cbClaim.checked);
+            saveSettings(settings.autoRefresh, cbClaim.checked, settings.intervalSeconds);
             if (cbClaim.checked) {
                 startClaimObserver();
             } else {
@@ -215,17 +235,38 @@
             }
         });
 
+        // Interval input: only accept digits, max 2, restart timer on change
+        intervalInput.addEventListener('keypress', function (e) {
+            if (!/[0-9]/.test(e.key)) e.preventDefault();
+        });
+        intervalInput.addEventListener('input', function () {
+            // Strip non-digits
+            intervalInput.value = intervalInput.value.replace(/[^0-9]/g, '').slice(0, 2);
+        });
+        intervalInput.addEventListener('change', function () {
+            var val = parseInt(intervalInput.value, 10);
+            if (isNaN(val) || val < 1) { val = 1;  intervalInput.value = '1';  }
+            if (val > 99)              { val = 99; intervalInput.value = '99'; }
+            var settings = loadSettings();
+            saveSettings(settings.autoRefresh, settings.autoClaim, val);
+            // Restart timer immediately so new interval takes effect
+            if (settings.autoRefresh) startRefreshTimer();
+        });
+
         wrapper.appendChild(cbRefresh);
         wrapper.appendChild(lblRefresh);
+        wrapper.appendChild(intervalInput);
+        wrapper.appendChild(lblSec);
         wrapper.appendChild(cbClaim);
         wrapper.appendChild(lblClaim);
         wrapper.appendChild(statusEl);
         logoutDiv.appendChild(wrapper);
 
-        // Apply saved settings to checkboxes
+        // Apply saved settings
         var settings = loadSettings();
-        cbRefresh.checked = settings.autoRefresh;
-        cbClaim.checked   = settings.autoClaim;
+        cbRefresh.checked       = settings.autoRefresh;
+        cbClaim.checked         = settings.autoClaim;
+        intervalInput.value     = String(settings.intervalSeconds);
     }
 
     // ── Entry point ──────────────────────────────────────────────────────────
