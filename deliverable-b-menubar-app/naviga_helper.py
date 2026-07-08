@@ -9,7 +9,6 @@ import json
 import os
 import time
 import threading
-import subprocess
 
 import rumps
 import Quartz
